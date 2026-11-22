@@ -9,8 +9,7 @@ namespace {
     struct Blob { int x, y, w, h; };
     std::vector<Blob> g_blobs;
 
-    inline bool isRed(DWORD c) {
-        int r = GetRValue(c), g = GetGValue(c), b = GetBValue(c);
+    inline bool isRed(unsigned char b, unsigned char g, unsigned char r) {
         return r > 150 && g < 85 && b < 85 && r > g + 60;
     }
 }
@@ -18,28 +17,48 @@ namespace {
 void screenaim::scan() {
     g_blobs.clear();
     int W = (int)g_screenW, H = (int)g_screenH;
+
     HDC scr = GetDC(nullptr);
     HDC mem = CreateCompatibleDC(scr);
-    HBITMAP bmp = CreateCompatibleBitmap(scr, W, H);
-    HGDIOBJ old = SelectObject(mem, bmp);
-    BitBlt(mem, 0, 0, W, H, scr, 0, 0, SRCCOPY);
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = W;
+    bi.bmiHeader.biHeight = -H;          // top-down
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    std::vector<unsigned char> bits((size_t)W * H * 4);
+    if (!GetDIBits(mem, (HBITMAP)GetCurrentObject(scr, OBJ_BITMAP), 0, H,
+                   bits.data(), &bi, DIB_RGB_COLORS)) {
+        // fallback: ambil dari screenshot DC
+        HBITMAP bmp = CreateCompatibleBitmap(scr, W, H);
+        HGDIOBJ old = SelectObject(mem, bmp);
+        BitBlt(mem, 0, 0, W, H, scr, 0, 0, SRCCOPY);
+        GetDIBits(mem, bmp, 0, H, bits.data(), &bi, DIB_RGB_COLORS);
+        SelectObject(mem, old);
+        DeleteObject(bmp);
+    }
+    DeleteDC(mem);
+    ReleaseDC(nullptr, scr);
 
-    // grid 6px, hanya area tengah (buang HUD tepi)
+    // grid 6px, area tengah, baca langsung dari buffer (cepat)
     const int C = 6;
     int gw = W / C, gh = H / C;
     std::vector<unsigned char> hot(gw * gh, 0);
     for (int gy = H / 6; gy < H * 5 / 6; gy++) {
         for (int gx = W / 6; gx < W * 5 / 6; gx++) {
             int n = 0;
-            for (int dy = 0; dy < C; dy += 2)
-                for (int dx = 0; dx < C; dx += 2)
-                    if (isRed(GetPixel(mem, gx*C+dx, gy*C+dy))) n++;
+            for (int dy = 0; dy < C; dy += 3) {
+                for (int dx = 0; dx < C; dx += 3) {
+                    int x = gx*C+dx, y = gy*C+dy;
+                    size_t idx = ((size_t)y * W + x) * 4;
+                    if (isRed(bits[idx], bits[idx+1], bits[idx+2])) n++;
+                }
+            }
             if (n >= 2) hot[gy*gw+gx] = 1;
         }
     }
-    SelectObject(mem, old); DeleteObject(bmp); DeleteDC(mem); ReleaseDC(nullptr, scr);
 
-    // cluster
     std::vector<unsigned char> seen(gw*gh, 0);
     for (int i = 0; i < gw*gh; i++) {
         if (!hot[i] || seen[i]) continue;
@@ -58,7 +77,6 @@ void screenaim::scan() {
             }
         }
         int bw=(mxx-mnx+1)*C, bh=(mxy-mny+1)*C;
-        // nama musuh: lebar 20..180, tinggi 5..28
         if(cnt>=2 && bw>=20 && bw<=180 && bh>=5 && bh<=28)
             g_blobs.push_back({mnx*C, mny*C, bw, bh});
     }
@@ -74,6 +92,6 @@ bool screenaim::target(float& ox, float& oy) {
         if(d<best){best=d;pick=b;}
     }
     ox = pick.x + pick.w*0.5f;
-    oy = pick.y + pick.h + 18.0f;   // badan di bawah nama
+    oy = pick.y + pick.h + 18.0f;
     return true;
 }

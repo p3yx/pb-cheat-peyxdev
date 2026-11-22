@@ -53,16 +53,16 @@ namespace {
             DWORD t = GetTickCount();
             if (t - lastTop > 1000) { esp::reassertTopMost(); lastTop = t; }
             if (t - lastVis > 150)  { esp::refresh();       lastVis = t; }
+            menu::render();   // pump pesan ESP + menu (jangan pernah dilewati)
             if (g_config.getBool("aimbot_enabled", false)) {
                 static DWORD lastAim = 0;
-                if (t - lastAim > 100) {
+                if (t - lastAim > 150 && g_esp) {
                     screenaim::scan();
                     float ax, ay;
                     if (screenaim::target(ax, ay)) aimMove(ax, ay);
                     lastAim = t;
                 }
             }
-            menu::render();   // pump pesan ESP + menu
             Sleep(8);
         }
 
