@@ -2,6 +2,7 @@
 #include "Globals.h"
 #include "ESP.h"
 #include "Patches.h"
+#include "Game.h"
 #include <Windows.h>
 #include <algorithm>
 #include <cstring>
@@ -46,7 +47,7 @@ namespace {
     POINT g_dragOffset{ 0, 0 };
     bool  g_lastEsp = true;
 
-    const wchar_t* CLASS  = L"PBFreeMenuV5";
+    const wchar_t* CLASS  = L"PBFreeMenuV6";
     const int WIN_W   = 274;
     const int TITLE_H = 26;
     const int ROW_H   = 19;
@@ -463,7 +464,10 @@ bool menu::init() {
     wc.hInstance = GetModuleHandle(nullptr);
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.lpszClassName = CLASS;
-    if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+    if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        game::logStatus("MENU: RegisterClass gagal");
+        return false;
+    }
 
     g_font = CreateFontA(13, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                          DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -483,7 +487,12 @@ bool menu::init() {
     g_hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
                              CLASS, L"CHEAT PB BY PEYXDEV", WS_POPUP | WS_VISIBLE,
                              mx, my, WIN_W, 400, nullptr, nullptr, wc.hInstance, nullptr);
-    if (!g_hwnd) return false;
+    if (!g_hwnd) {
+        char b[80]; snprintf(b, sizeof(b), "MENU: CreateWindow gagal err=%lu", GetLastError());
+        game::logStatus(b);
+        return false;
+    }
+    game::logStatus("MENU: window dibuat");
     SetLayeredWindowAttributes(g_hwnd, RGB(0, 0, 0), 238, LWA_ALPHA);
     recalcHeight();
     UpdateWindow(g_hwnd);
