@@ -1,102 +1,56 @@
 #include "ScreenAim.h"
 #include "Globals.h"
 #include <Windows.h>
-#include <vector>
-#include <algorithm>
 #include <cmath>
 
 namespace {
-    struct Blob { int x, y, w, h; };
-    std::vector<Blob> g_blobs;
-
-    inline bool isRed(unsigned char b, unsigned char g, unsigned char r) {
-        // nametag musuh = merah murni (255,0,0)
-        return r > 180 && g < 70 && b < 70;
-    }
+    struct Pt { int x, y; };
+    Pt g_target{ 0,0 };
+    bool g_have = false;
 }
 
+// baca langsung dari screen DC, sampling jarang supaya ringan
 void screenaim::scan() {
-    g_blobs.clear();
-    int W = (int)g_screenW, H = (int)g_screenH;
-    if (W < 64 || H < 64) return;
+    g_have = false;
+    int W=(int)g_screenW, H=(int)g_screenH;
+    HDC dc = GetDC(nullptr);
+    if (!dc) return;
 
-    HDC scr = GetDC(nullptr);
-    HDC mem = CreateCompatibleDC(scr);
-    HBITMAP bmp = CreateCompatibleBitmap(scr, W, H);
-    if (!bmp) { DeleteDC(mem); ReleaseDC(nullptr, scr); return; }
-    HGDIOBJ old = SelectObject(mem, bmp);
-    BitBlt(mem, 0, 0, W, H, scr, 0, 0, SRCCOPY);
-
-    BITMAPINFO bi{};
-    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bi.bmiHeader.biWidth = W;
-    bi.bmiHeader.biHeight = -H;   // top-down
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-
-    std::vector<unsigned char> bits((size_t)W * H * 4, 0);
-    BOOL ok = GetDIBits(mem, bmp, 0, H, bits.data(), &bi, DIB_RGB_COLORS);
-
-    SelectObject(mem, old);
-    DeleteObject(bmp);
-    DeleteDC(mem);
-    ReleaseDC(nullptr, scr);
-    if (!ok) return;
-
-    const int C = 6;
-    int gw = W / C, gh = H / C;
-    std::vector<unsigned char> hot(gw * gh, 0);
-    for (int gy = H / 6; gy < H * 5 / 6; gy++) {
-        for (int gx = W / 6; gx < W * 5 / 6; gx++) {
-            int n = 0;
-            for (int dy = 0; dy < C; dy += 3) {
-                for (int dx = 0; dx < C; dx += 3) {
-                    int x = gx*C+dx, y = gy*C+dy;
-                    if (x >= W || y >= H) continue;
-                    size_t idx = ((size_t)y * W + x) * 4;
-                    if (isRed(bits[idx], bits[idx+1], bits[idx+2])) n++;
-                }
+    int bestCount = 0, bx=0, by=0;
+    const int STEP = 8;
+    // area tengah layar, hindari HUD tepi
+    for (int y = H/5; y < H*4/5; y += STEP) {
+        for (int x = W/5; x < W*4/5; x += STEP) {
+            COLORREF c = GetPixel(dc, x, y);
+            int r=GetRValue(c), g=GetGValue(c), b=GetBValue(c);
+            // nametag musuh = merah murni (255,0,0)
+            if (r > 230 && g < 30 && b < 30) {
+                // hitung seberapa banyak merah di sekitar titik ini
+                int cnt=0;
+                for (int dy=-8; dy<=8; dy+=4)
+                    for (int dx=-8; dx<=8; dx+=4) {
+                        int nx=x+dx, ny=y+dy;
+                        if (nx<0||ny<0||nx>=W||ny>=H) continue;
+                        COLORREF c2=GetPixel(dc,nx,ny);
+                        if (GetRValue(c2)>230 && GetGValue(c2)<30 && GetBValue(c2)<30) cnt++;
+                    }
+                if (cnt > bestCount) { bestCount=cnt; bx=x; by=y; }
             }
-            if (n >= 2) hot[gy*gw+gx] = 1;
         }
     }
+    ReleaseDC(nullptr, dc);
 
-    std::vector<unsigned char> seen(gw*gh, 0);
-    for (int i = 0; i < gw*gh; i++) {
-        if (!hot[i] || seen[i]) continue;
-        int mnx=gw,mny=gh,mxx=0,mxy=0,cnt=0;
-        std::vector<int> st; st.push_back(i); seen[i]=1;
-        while (!st.empty()) {
-            int c=st.back(); st.pop_back();
-            int cx=c%gw, cy=c/gw;
-            mnx=std::min(mnx,cx); mxx=std::max(mxx,cx);
-            mny=std::min(mny,cy); mxy=std::max(mxy,cy); cnt++;
-            for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
-                int nx=cx+dx,ny=cy+dy;
-                if(nx<0||ny<0||nx>=gw||ny>=gh)continue;
-                int ni=ny*gw+nx;
-                if(hot[ni]&&!seen[ni]){seen[ni]=1;st.push_back(ni);}
-            }
-        }
-        int bw=(mxx-mnx+1)*C, bh=(mxy-mny+1)*C;
-        if(cnt>=2 && bw>=12 && bw<=200 && bh>=4 && bh<=36)
-            g_blobs.push_back({mnx*C, mny*C, bw, bh});
+    if (bestCount >= 2) {
+        g_target = { bx, by };
+        g_have = true;
     }
 }
 
-int screenaim::count() { return (int)g_blobs.size(); }
+int screenaim::count() { return g_have ? 1 : 0; }
 
 bool screenaim::target(float& ox, float& oy) {
-    if (g_blobs.empty()) return false;
-    float cx=g_screenW*0.5f, cy=g_screenH*0.5f, best=1e9f;
-    Blob pick{};
-    for (auto& b : g_blobs) {
-        float x=b.x+b.w*0.5f, y=b.y+b.h*0.5f;
-        float d=std::sqrt((x-cx)*(x-cx)+(y-cy)*(y-cy));
-        if(d<best){best=d;pick=b;}
-    }
-    ox = pick.x + pick.w*0.5f;
-    oy = pick.y + pick.h + 18.0f;
+    if (!g_have) return false;
+    ox = (float)g_target.x;
+    oy = (float)g_target.y + 14.0f;   // badan sedikit di bawah nama
     return true;
 }
