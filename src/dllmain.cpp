@@ -51,7 +51,7 @@ namespace {
 
             // Topmost & cek visual cukup periodik, bukan tiap 2ms.
             DWORD t = GetTickCount();
-            if (t - lastTop > 250) { esp::reassertTopMost(); lastTop = t; }
+            if (t - lastTop > 500) { esp::reassertTopMost(); lastTop = t; }
             if (t - lastVis > 150)  { esp::refresh();       lastVis = t; }
             menu::render();   // pump pesan ESP + menu (jangan pernah dilewati)
             if (g_config.getBool("aimbot_enabled", false) && g_esp &&

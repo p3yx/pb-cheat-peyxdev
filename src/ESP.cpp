@@ -211,7 +211,7 @@ void esp::refresh() {
     // Jangan invalidate tiap frame — itu yang bikin crosshair kedip.
     // Hanya gambar ulang kalau pengaturan crosshair benar-benar berubah.
     static bool lastOn = true;
-    static int  lastR = 0, lastThick = 0;
+    static int  lastR = -1, lastThick = -1;
     static COLORREF lastCol = 0;
     bool on = g_config.getBool("draw_crosshair", true);
     int r = g_config.getInt("crosshair_size", 12);
