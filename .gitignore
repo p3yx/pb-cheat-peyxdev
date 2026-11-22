@@ -1,0 +1,8 @@
+# probe / diagnostic binaries
+*_probe.dll
+*_scan.dll
+focus.exe
+key.exe
+*.cmd
+*.log
+*.tmp
