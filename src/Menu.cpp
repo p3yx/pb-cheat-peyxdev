@@ -124,7 +124,6 @@ namespace {
         // Hanya fitur yang benar-benar bekerja (tanpa offset).
         addSection("VISUAL", sec);
         addToggleCfg(sec, "Name Tag ESP", "draw_name", true);
-        addToggleCfg(sec, "Aim Bot", "aimbot_enabled", false);
         addToggleCfg(sec, "Crosshair", "draw_crosshair", true);
         addCycle(sec, "Cross Size", "crosshair_size", { "8", "12", "16", "20" }, "12");
 

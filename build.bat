@@ -22,7 +22,7 @@ if errorlevel 1 goto fail
 echo [*] Compile pb-cheat.dll (32-bit) ...
 "%CXX%" %FLAGS% -shared -o pb-cheat.dll ^
   src/dllmain.cpp src/Config.cpp src/Memory.cpp src/Structs.cpp ^
-  src/Game.cpp src/ESP.cpp src/Menu.cpp src/Patches.cpp src/ReloadFast.cpp src/ScreenAim.cpp ^
+  src/Game.cpp src/ESP.cpp src/Menu.cpp src/Patches.cpp src/ReloadFast.cpp ^
   -luser32 -lgdi32 -lwinmm
 if errorlevel 1 goto fail
 
