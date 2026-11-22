@@ -10,7 +10,8 @@ namespace {
     std::vector<Blob> g_blobs;
 
     inline bool isRed(unsigned char b, unsigned char g, unsigned char r) {
-        return r > 150 && g < 85 && b < 85 && r > g + 60;
+        // nametag musuh = merah murni (255,0,0)
+        return r > 180 && g < 70 && b < 70;
     }
 }
 
@@ -79,10 +80,12 @@ void screenaim::scan() {
             }
         }
         int bw=(mxx-mnx+1)*C, bh=(mxy-mny+1)*C;
-        if(cnt>=2 && bw>=20 && bw<=180 && bh>=5 && bh<=28)
+        if(cnt>=2 && bw>=12 && bw<=200 && bh>=4 && bh<=36)
             g_blobs.push_back({mnx*C, mny*C, bw, bh});
     }
 }
+
+int screenaim::count() { return (int)g_blobs.size(); }
 
 bool screenaim::target(float& ox, float& oy) {
     if (g_blobs.empty()) return false;

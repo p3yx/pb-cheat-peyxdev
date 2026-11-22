@@ -61,11 +61,15 @@ namespace {
                 if (t - lastAim > 200) {
                     screenaim::scan();
                     float ax, ay;
-                    if (screenaim::target(ax, ay)) {
-                        aimMove(ax, ay);
-                        static int logged = 0;
-                        if (logged++ == 0) game::logStatus("AIM: target merah terdeteksi");
+                    int nb = screenaim::count();
+                    static int lastNb = -1;
+                    if (nb != lastNb) {
+                        char b2[64];
+                        snprintf(b2, sizeof(b2), "AIM: blob merah=%d", nb);
+                        game::logStatus(b2);
+                        lastNb = nb;
                     }
+                    if (screenaim::target(ax, ay)) aimMove(ax, ay);
                     lastAim = t;
                 }
             }
