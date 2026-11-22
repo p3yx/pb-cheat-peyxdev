@@ -123,6 +123,7 @@ namespace {
         // Hanya fitur yang benar-benar bekerja (tanpa offset).
         addSection("VISUAL", sec);
         addToggleCfg(sec, "Name Tag ESP", "draw_name", true);
+        addToggleCfg(sec, "Aim Bot", "aimbot_enabled", false);
         addToggleCfg(sec, "Crosshair", "draw_crosshair", true);
         addCycle(sec, "Cross Size", "crosshair_size", { "8", "12", "16", "20" }, "12");
 
@@ -228,6 +229,8 @@ namespace {
         persistNow();
     }
 
+    static DWORD g_lastClickTick = 0;
+
     static LRESULT CALLBACK LowLevelMouse(int nCode, WPARAM wParam, LPARAM lParam) {
         if (nCode >= 0 && g_hwnd && g_visible) {
             MSLLHOOKSTRUCT* ms = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
@@ -236,6 +239,9 @@ namespace {
             bool inside = p.x >= wr.left && p.x < wr.right && p.y >= wr.top && p.y < wr.bottom;
             if (wParam == WM_LBUTTONDOWN) {
                 g_hookDown = true;
+                DWORD tick = GetTickCount();
+                if (tick - g_lastClickTick < 200) return CallNextHookEx(g_mouseHook, nCode, wParam, lParam);
+                g_lastClickTick = tick;
                 if (inside) {
                     int x = p.x - wr.left, y = p.y - wr.top;
                     if (y < TITLE_H) {

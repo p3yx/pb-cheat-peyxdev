@@ -4,10 +4,20 @@
 #include "Menu.h"
 #include "Patches.h"
 #include "ReloadFast.h"
+#include "ScreenAim.h"
 #include <Windows.h>
 
 namespace {
     HMODULE g_self = nullptr;
+
+    void aimMove(float tx, float ty) {
+        float cx = g_screenW * 0.5f, cy = g_screenH * 0.5f;
+        int dx = (int)((tx - cx) * 0.25f);
+        int dy = (int)((ty - cy) * 0.25f);
+        if (dx > 35) dx = 35; if (dx < -35) dx = -35;
+        if (dy > 35) dy = 35; if (dy < -35) dy = -35;
+        if (dx || dy) mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0);
+    }
 
     DWORD WINAPI mainThread(LPVOID) {
         if (!game::init()) return 1;
@@ -43,6 +53,15 @@ namespace {
             DWORD t = GetTickCount();
             if (t - lastTop > 1000) { esp::reassertTopMost(); lastTop = t; }
             if (t - lastVis > 150)  { esp::refresh();       lastVis = t; }
+            if (g_config.getBool("aimbot_enabled", false)) {
+                static DWORD lastAim = 0;
+                if (t - lastAim > 100) {
+                    screenaim::scan();
+                    float ax, ay;
+                    if (screenaim::target(ax, ay)) aimMove(ax, ay);
+                    lastAim = t;
+                }
+            }
             menu::render();   // pump pesan ESP + menu
             Sleep(8);
         }
