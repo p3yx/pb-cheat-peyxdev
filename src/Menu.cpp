@@ -168,6 +168,11 @@ namespace {
         return "";
     }
 
+    static HHOOK g_mouseHook = nullptr;
+    static bool g_hookDown = false;
+    static bool g_hookDrag = false;
+    static POINT g_hookOff{ 0, 0 };
+
     static FILETIME g_cfgTime{};
 
     void rememberConfigTime() {
@@ -221,6 +226,41 @@ namespace {
             break;
         }
         persistNow();
+    }
+
+    static LRESULT CALLBACK LowLevelMouse(int nCode, WPARAM wParam, LPARAM lParam) {
+        if (nCode >= 0 && g_hwnd && g_visible) {
+            MSLLHOOKSTRUCT* ms = reinterpret_cast<MSLLHOOKSTRUCT*>(lParam);
+            POINT p = ms->pt;
+            RECT wr{}; GetWindowRect(g_hwnd, &wr);
+            bool inside = p.x >= wr.left && p.x < wr.right && p.y >= wr.top && p.y < wr.bottom;
+            if (wParam == WM_LBUTTONDOWN) {
+                g_hookDown = true;
+                if (inside) {
+                    int x = p.x - wr.left, y = p.y - wr.top;
+                    if (y < TITLE_H) {
+                        if (x > WIN_W - 52 && x < WIN_W - 34) {
+                            g_visible = false; ShowWindow(g_hwnd, SW_HIDE);
+                        } else if (x > WIN_W - 34) {
+                            if (g_minimized) restoreMenu(); else minimizeMenu();
+                        } else if (g_minimized) restoreMenu();
+                        else { g_hookDrag = true; g_hookOff = { x, y }; }
+                    } else if (!g_minimized) {
+                        for (size_t i = 0; i < items.size(); ++i) {
+                            if (rowY[i] < 0) continue;
+                            int rh = (items[i].type == Item::Section ? SEC_H : ROW_H);
+                            if (y >= rowY[i] && y < rowY[i] + rh) { activate(i); invalidate(); break; }
+                        }
+                    }
+                }
+            } else if (wParam == WM_LBUTTONUP) {
+                g_hookDown = false; g_hookDrag = false;
+            } else if (wParam == WM_MOUSEMOVE && g_hookDrag && g_hookDown) {
+                SetWindowPos(g_hwnd, HWND_TOPMOST, p.x - g_hookOff.x, p.y - g_hookOff.y,
+                             0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+        return CallNextHookEx(g_mouseHook, nCode, wParam, lParam);
     }
 
     // ---------- helper gambar modern ----------
@@ -428,6 +468,12 @@ bool menu::init() {
 
     int mx = g_config.getInt("menu_x", 20);
     int my = g_config.getInt("menu_y", 90);
+    HMODULE hm = nullptr;
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCSTR>(&menu::init), &hm);
+    g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouse, hm, 0);
+
     g_hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
                              CLASS, L"CHEAT PB BY PEYXDEV", WS_POPUP | WS_VISIBLE,
                              mx, my, WIN_W, 400, nullptr, nullptr, wc.hInstance, nullptr);
@@ -452,41 +498,6 @@ void menu::render() {
         DispatchMessageW(&msg);
     }
 
-    // --- klik manual via polling: fullscreen game merebut WM_LBUTTONDOWN ---
-    static bool lastDown = false;
-    static bool manualDrag = false;
-    static POINT dragOff{ 0, 0 };
-    POINT cur{}; GetCursorPos(&cur);
-    RECT wr{}; GetWindowRect(g_hwnd, &wr);
-    bool inside = cur.x >= wr.left && cur.x < wr.right && cur.y >= wr.top && cur.y < wr.bottom;
-    bool down = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-    if (down && !lastDown && inside) {
-        int x = cur.x - wr.left, y = cur.y - wr.top;
-        if (y < TITLE_H) {
-            if (x > WIN_W - 52 && x < WIN_W - 34) {   // tombol X: tutup menu, bukan game
-                g_visible = false;
-                ShowWindow(g_hwnd, SW_HIDE);
-            } else if (x > WIN_W - 34) {
-                if (g_minimized) restoreMenu(); else minimizeMenu();
-            } else if (g_minimized) {
-                restoreMenu();
-            } else {
-                manualDrag = true; dragOff = { x, y };
-            }
-        } else if (!g_minimized) {
-            for (size_t i = 0; i < items.size(); ++i) {
-                if (rowY[i] < 0) continue;
-                int rh = (items[i].type == Item::Section ? SEC_H : ROW_H);
-                if (y >= rowY[i] && y < rowY[i] + rh) { activate(i); invalidate(); break; }
-            }
-        }
-    }
-    if (!down) manualDrag = false;
-    if (manualDrag && down)
-        SetWindowPos(g_hwnd, HWND_TOPMOST, cur.x - dragOff.x, cur.y - dragOff.y,
-                     0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-    lastDown = down;
-
     // patch nametag ESP mengikuti toggle "Name Tag"
     patches::setNameTag(g_config.getBool("draw_name", true));
 
@@ -499,6 +510,7 @@ void menu::render() {
 }
 
 void menu::shutdown() {
+    if (g_mouseHook) { UnhookWindowsHookEx(g_mouseHook); g_mouseHook = nullptr; }
     if (g_hwnd) { DestroyWindow(g_hwnd); g_hwnd = nullptr; }
     if (g_font) { DeleteObject(g_font); g_font = nullptr; }
     if (g_fontBold) { DeleteObject(g_fontBold); g_fontBold = nullptr; }

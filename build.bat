@@ -15,6 +15,10 @@ if not exist "%CXX%" (
 echo [*] Compiler: %CXX%
 set "FLAGS=-std=c++17 -O2 -s -static -static-libgcc -static-libstdc++"
 
+echo [*] Compile icon ...
+"C:\Users\Peyx\tools\mingw32\bin\windres.exe" -i icon.rc -o icon.o
+if errorlevel 1 goto fail
+
 echo [*] Compile pb-cheat.dll (32-bit) ...
 "%CXX%" %FLAGS% -shared -o pb-cheat.dll ^
   src/dllmain.cpp src/Config.cpp src/Memory.cpp src/Structs.cpp ^
@@ -23,11 +27,11 @@ echo [*] Compile pb-cheat.dll (32-bit) ...
 if errorlevel 1 goto fail
 
 echo [*] Compile injector.exe (32-bit) ...
-"%CXX%" %FLAGS% -o injector.exe injector/injector.cpp -luser32
+"%CXX%" %FLAGS% -o injector.exe injector/injector.cpp icon.o -luser32
 if errorlevel 1 goto fail
 
 echo [*] Compile launcher.exe (32-bit, 1-klik) ...
-"%CXX%" %FLAGS% -mwindows -o launcher.exe launcher.cpp -luser32 -lshell32
+"%CXX%" %FLAGS% -mwindows -o launcher.exe launcher.cpp icon.o -luser32 -lshell32
 if errorlevel 1 goto fail
 
 echo.
