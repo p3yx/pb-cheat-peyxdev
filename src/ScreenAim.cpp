@@ -17,31 +17,32 @@ namespace {
 void screenaim::scan() {
     g_blobs.clear();
     int W = (int)g_screenW, H = (int)g_screenH;
+    if (W < 64 || H < 64) return;
 
     HDC scr = GetDC(nullptr);
     HDC mem = CreateCompatibleDC(scr);
+    HBITMAP bmp = CreateCompatibleBitmap(scr, W, H);
+    if (!bmp) { DeleteDC(mem); ReleaseDC(nullptr, scr); return; }
+    HGDIOBJ old = SelectObject(mem, bmp);
+    BitBlt(mem, 0, 0, W, H, scr, 0, 0, SRCCOPY);
+
     BITMAPINFO bi{};
     bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bi.bmiHeader.biWidth = W;
-    bi.bmiHeader.biHeight = -H;          // top-down
+    bi.bmiHeader.biHeight = -H;   // top-down
     bi.bmiHeader.biPlanes = 1;
     bi.bmiHeader.biBitCount = 32;
     bi.bmiHeader.biCompression = BI_RGB;
-    std::vector<unsigned char> bits((size_t)W * H * 4);
-    if (!GetDIBits(mem, (HBITMAP)GetCurrentObject(scr, OBJ_BITMAP), 0, H,
-                   bits.data(), &bi, DIB_RGB_COLORS)) {
-        // fallback: ambil dari screenshot DC
-        HBITMAP bmp = CreateCompatibleBitmap(scr, W, H);
-        HGDIOBJ old = SelectObject(mem, bmp);
-        BitBlt(mem, 0, 0, W, H, scr, 0, 0, SRCCOPY);
-        GetDIBits(mem, bmp, 0, H, bits.data(), &bi, DIB_RGB_COLORS);
-        SelectObject(mem, old);
-        DeleteObject(bmp);
-    }
+
+    std::vector<unsigned char> bits((size_t)W * H * 4, 0);
+    BOOL ok = GetDIBits(mem, bmp, 0, H, bits.data(), &bi, DIB_RGB_COLORS);
+
+    SelectObject(mem, old);
+    DeleteObject(bmp);
     DeleteDC(mem);
     ReleaseDC(nullptr, scr);
+    if (!ok) return;
 
-    // grid 6px, area tengah, baca langsung dari buffer (cepat)
     const int C = 6;
     int gw = W / C, gh = H / C;
     std::vector<unsigned char> hot(gw * gh, 0);
@@ -51,6 +52,7 @@ void screenaim::scan() {
             for (int dy = 0; dy < C; dy += 3) {
                 for (int dx = 0; dx < C; dx += 3) {
                     int x = gx*C+dx, y = gy*C+dy;
+                    if (x >= W || y >= H) continue;
                     size_t idx = ((size_t)y * W + x) * 4;
                     if (isRed(bits[idx], bits[idx+1], bits[idx+2])) n++;
                 }

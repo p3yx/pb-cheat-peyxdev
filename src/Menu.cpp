@@ -558,6 +558,7 @@ void menu::reloadConfig() {
 }
 
 bool menu::isVisible() { return g_visible && !g_minimized; }
+HWND menu::menuHwnd() { return g_hwnd; }
 
 bool menu::pointerOver() {
     if (!g_hwnd || !g_visible) return false;

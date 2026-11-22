@@ -1,4 +1,5 @@
 #pragma once
+#include <Windows.h>
 namespace menu {
     bool init();
     void render();        // dipanggil tiap tick (menggantikan/ melengkapi esp::render)
@@ -7,5 +8,6 @@ namespace menu {
     void saveAndMinimize();
     void reloadConfig();
     bool isVisible();
+    HWND menuHwnd();
     bool pointerOver();
 }

@@ -54,9 +54,11 @@ namespace {
             if (t - lastTop > 1000) { esp::reassertTopMost(); lastTop = t; }
             if (t - lastVis > 150)  { esp::refresh();       lastVis = t; }
             menu::render();   // pump pesan ESP + menu (jangan pernah dilewati)
-            if (g_config.getBool("aimbot_enabled", false)) {
+            if (g_config.getBool("aimbot_enabled", false) && g_esp &&
+                !(GetAsyncKeyState(VK_LBUTTON) & 0x8000) &&
+                GetForegroundWindow() != menu::menuHwnd()) {
                 static DWORD lastAim = 0;
-                if (t - lastAim > 150 && g_esp) {
+                if (t - lastAim > 200) {
                     screenaim::scan();
                     float ax, ay;
                     if (screenaim::target(ax, ay)) aimMove(ax, ay);
